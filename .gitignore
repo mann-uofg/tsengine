@@ -1,0 +1,22 @@
+# Build output
+build/
+compile_commands.json
+CMakeUserPresets.json
+
+# Private notes and agent context (kept local, backed up outside the repo)
+INTERVIEW.md
+AGENTS.md
+CLAUDE.md
+.claude/
+
+# Engine data produced by tests and benchmarks
+data/
+*.wal
+
+# Editors / OS
+.vscode/
+.idea/
+.vs/
+*.swp
+.DS_Store
+Thumbs.db
