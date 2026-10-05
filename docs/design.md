@@ -30,9 +30,34 @@ HTTP (Influx line protocol)
 
 - **WAL:** append-only segment files of length-prefixed, CRC32C-checksummed records. Replay stops
   at the first torn or corrupt record. fsync policy is configurable: per write, group commit, or
-  interval. Record layout: **open**.
+  interval. Layout below.
 - **Memtable:** per-series append buffers. Out-of-order points are accepted within a bounded
   window and sorted at flush. Structure: **open**.
+
+### WAL format
+
+All integers are fixed-width little-endian.
+
+Segment file `wal/NNNNNNNN.wal`:
+
+```
+segment header (8 bytes):  magic u32 "TSWL" | version u16 | reserved u16
+then records back to back:
+  crc32c  u32   over length, type and payload
+  length  u32   payload bytes, at most 16 MiB
+  type    u8    1 = SeriesDef, 2 = Samples; 0 is never valid
+  payload
+```
+
+| Record | Payload |
+|---|---|
+| `SeriesDef` | `series_id u64`, `key_len u32`, `key` bytes (canonical series key) |
+| `Samples` | repeated `series_id u64`, `timestamp_ns i64`, `value` (IEEE-754 bits, `u64`) — 24 bytes per point, count = length / 24 |
+
+Replay reads records in order and stops at the first one that is short, has an invalid type or
+length, or fails its CRC. In the newest segment that is a torn tail: the file is truncated to the
+end of the last good record and appends continue from there. In any older segment it is
+corruption and startup fails.
 
 ## Storage layout
 
