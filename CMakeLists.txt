@@ -20,6 +20,7 @@ if(TSENGINE_SANITIZE)
 endif()
 
 add_library(tsengine
+  src/crc32c.cpp
   src/version.cpp
 )
 target_include_directories(tsengine PUBLIC include)
