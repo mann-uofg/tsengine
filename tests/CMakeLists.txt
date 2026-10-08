@@ -10,7 +10,7 @@ FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
 add_executable(tsengine_tests
-  smoke_test.cpp
+  coding_test.cpp
 )
 target_link_libraries(tsengine_tests PRIVATE tsengine tsengine_options GTest::gtest_main)
 gtest_discover_tests(tsengine_tests)
