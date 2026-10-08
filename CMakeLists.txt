@@ -22,6 +22,7 @@ endif()
 add_library(tsengine
   src/crc32c.cpp
   src/version.cpp
+  src/wal.cpp
 )
 target_include_directories(tsengine PUBLIC include)
 target_link_libraries(tsengine PRIVATE tsengine_options)

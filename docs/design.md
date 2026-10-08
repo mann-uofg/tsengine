@@ -54,10 +54,15 @@ then records back to back:
 | `SeriesDef` | `series_id u64`, `key_len u32`, `key` bytes (canonical series key) |
 | `Samples` | repeated `series_id u64`, `timestamp_ns i64`, `value` (IEEE-754 bits, `u64`) — 24 bytes per point, count = length / 24 |
 
-Replay reads records in order and stops at the first one that is short, has an invalid type or
+Replay reads records in order and stops at the first one that is short, has an impossible
 length, or fails its CRC. In the newest segment that is a torn tail: the file is truncated to the
 end of the last good record and appends continue from there. In any older segment it is
-corruption and startup fails.
+corruption and startup fails. A record that passes its CRC but has an unknown type or a
+malformed payload is always corruption.
+
+A segment is created by writing its header to a temporary file, fsyncing it, renaming it into
+place and fsyncing the directory, so a file with a segment name always has a complete header.
+After any failed write or fsync the writer refuses further appends.
 
 ## Storage layout
 
