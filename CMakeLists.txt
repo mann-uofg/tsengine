@@ -21,6 +21,7 @@ endif()
 
 add_library(tsengine
   src/crc32c.cpp
+  src/line_protocol.cpp
   src/version.cpp
   src/wal.cpp
 )

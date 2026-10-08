@@ -12,6 +12,7 @@ include(GoogleTest)
 add_executable(tsengine_tests
   coding_test.cpp
   crc32c_test.cpp
+  line_protocol_test.cpp
   wal_test.cpp
 )
 target_link_libraries(tsengine_tests PRIVATE tsengine tsengine_options GTest::gtest_main)
