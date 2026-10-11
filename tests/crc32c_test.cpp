@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <random>
 #include <string>
 
 namespace tsengine {
@@ -37,6 +39,24 @@ TEST(Crc32c, ExtendMatchesOneShot) {
   for (size_t split = 0; split <= data.size(); ++split) {
     const uint32_t first = Crc32c(data.data(), split);
     EXPECT_EQ(Crc32cExtend(first, data.data() + split, data.size() - split), whole);
+  }
+}
+
+// Every length from 0 to 300 at several alignments, so the eight-byte loop, its tail and
+// unaligned starts are all covered.
+TEST(Crc32c, HardwareAndTableImplementationsAgree) {
+  std::mt19937 rng(7);
+  std::string data(320, '\0');
+  for (char& c : data) {
+    c = static_cast<char>(rng());
+  }
+  for (size_t offset = 0; offset < 8; ++offset) {
+    for (size_t n = 0; n <= 300; ++n) {
+      const uint32_t seed = static_cast<uint32_t>(rng());
+      ASSERT_EQ(Crc32cExtend(seed, data.data() + offset, n),
+                Crc32cExtendPortable(seed, data.data() + offset, n))
+          << "offset=" << offset << " n=" << n;
+    }
   }
 }
 
