@@ -1,6 +1,8 @@
 # tsengine design (v1)
 
-Draft. Sections marked **open** are decided when the component is built.
+Describes what is built so far (WAL, block files, memtable, range queries) and the plan for the
+rest. Time partitions, the manifest, compaction, the series index and the HTTP API are not
+built yet.
 
 ## Goal
 
@@ -31,8 +33,9 @@ HTTP (Influx line protocol)
 - **WAL:** append-only segment files of length-prefixed, CRC32C-checksummed records. Replay stops
   at the first torn or corrupt record. fsync policy is configurable: per write, group commit, or
   interval. Layout below.
-- **Memtable:** per-series append buffers. Out-of-order points are accepted within a bounded
-  window and sorted at flush. Structure: **open**.
+- **Memtable:** a hash map from series ID to an append buffer of timestamps and values.
+  Appending never sorts. A series is sorted only when it is read or flushed, and only if points
+  actually arrived out of order; a timestamp written more than once keeps its last write.
 
 ### WAL format
 
@@ -79,9 +82,63 @@ data/
   TimescaleDB chunks are.
 - **Block file:** per series, blocks of ~1k points. Timestamps are delta-of-delta encoded, values
   Gorilla XOR encoded. A footer holds one index entry per block: series ID, min/max timestamp,
-  count, and sum/min/max of the values. Files are read with `mmap`. Byte layout: **open**.
+  count, and sum/min/max of the values. Files are read with `mmap`. Layout below.
 - **Compaction:** time-window (Cassandra TWCS style) — merge the small flushed files inside one
   partition into one, resolving duplicate timestamps (last write wins).
+
+### Block file format
+
+All integers are fixed-width little-endian.
+
+```
+header (8 bytes):   magic u32 "TSBK" | version u16 | reserved u16
+blocks:             for each block, its timestamp stream then its value stream
+index:              one 72-byte entry per block, sorted by (series ID, min timestamp)
+footer (24 bytes):  index offset u64 | block count u64 | index crc32c u32 | magic u32
+```
+
+Index entry:
+
+| Field | Type | |
+|---|---|---|
+| series ID | u64 | |
+| min timestamp, max timestamp | i64, i64 | used to skip blocks outside a query's range |
+| offset, size | u64, u32 | where the block is in the file |
+| timestamp size | u32 | bytes of the timestamp stream; the rest is values |
+| count | u32 | points in the block, at most 1024 |
+| crc32c | u32 | of the block's bytes, checked on every read |
+| sum, min, max | f64 × 3 | of the block's values, for aggregation push-down |
+
+A file is written under a temporary name and renamed into place only after it is complete and
+fsynced, so a block file that exists is always whole. Blocks of one series never overlap in time
+within a file, which is what makes the index binary-searchable.
+
+### Block encoding
+
+Both streams follow the Gorilla paper (Pelkonen et al., VLDB 2015, §4.1), stored as two separate
+columns instead of interleaved. The point count lives in the index entry, not in the stream.
+
+**Timestamps — delta-of-delta.** The first timestamp is stored whole. Each later one stores
+`D = (t[i] - t[i-1]) - (t[i-1] - t[i-2])`, the change in the gap between points:
+
+| D | Encoding |
+|---|---|
+| 0 | `0` |
+| fits in 16 bits | `10` + 16 bits |
+| fits in 32 bits | `110` + 32 bits |
+| fits in 48 bits | `1110` + 48 bits |
+| otherwise | `1111` + 64 bits |
+
+Gorilla's buckets are 7/9/12/32 bits because its timestamps are in seconds; these are wider
+because ours are in nanoseconds. A series sampled at a fixed interval costs 1 bit per point.
+
+**Values — XOR.** The first value is stored whole. Each later one is XORed with its predecessor:
+
+| XOR | Encoding |
+|---|---|
+| 0 (value unchanged) | `0` |
+| meaningful bits fit inside the previous window | `10` + those bits |
+| otherwise | `11` + leading zeros (5 bits) + bit count − 1 (6 bits) + the bits |
 
 ## Read path
 
