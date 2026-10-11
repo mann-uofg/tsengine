@@ -20,6 +20,7 @@ if(TSENGINE_SANITIZE)
 endif()
 
 add_library(tsengine
+  src/codec.cpp
   src/crc32c.cpp
   src/file_util.cpp
   src/line_protocol.cpp
