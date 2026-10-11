@@ -1,8 +1,8 @@
 # tsengine design (v1)
 
 Describes the storage engine as built: WAL, memtable, compressed block files, time partitions,
-manifest, compaction, retention and crash recovery. Sections marked **planned** are not built
-yet: tag filters, aggregation, the HTTP API and concurrent readers.
+manifest, compaction, retention, crash recovery, tag lookup, aggregation with push-down and the
+HTTP API. The one thing marked **planned** is concurrent readers.
 
 ## Goal
 
@@ -18,15 +18,18 @@ individual points, non-Linux platforms.
 - **Series** = measurement + sorted tag set + field name, written as one canonical key
   (`cpu,host=a,region=us usage_user`) and mapped to a `uint64` series ID. The mapping is kept in
   `series.log`, an append-only file in the WAL record format; each new series is fsynced there
-  before any point can refer to its ID. Looking series up by tag (an inverted index) is
-  **planned**.
+  before any point can refer to its ID.
+- **Series index.** An in-memory inverted index, rebuilt from `series.log` on startup. For every
+  measurement, field and `tag=value` pair it keeps the sorted list of series IDs that have it.
+  A selector such as "measurement `cpu`, field `usage_user`, `hostname` is `host_1` or `host_2`"
+  is answered by intersecting and merging those sorted lists; no key is scanned.
 - **Point** = `(int64 timestamp_ns, float64 value)`. One field per series; a line-protocol line
   with N fields becomes N series.
 
 ## Write path
 
 ```
-Influx line protocol (HTTP ingest is planned)
+HTTP POST /write (Influx line protocol)
   → parse → resolve series IDs
   → WAL append (+ fsync)                 ← write is acknowledged here
   → memtable insert
@@ -176,18 +179,58 @@ because ours are in nanoseconds. A series sampled at a fixed interval costs 1 bi
 
 ## Read path
 
-Built today: a query is one series ID and a time range.
+A query is a series selector (measurement, field, tag filters), a time range, and optionally an
+aggregate (`count/sum/min/max/mean`) with a bucket width and a tag to group by.
 
-1. Partition pruning: only files of partitions that overlap the range are considered.
-2. Block pruning: within a file, a binary search on the index finds the blocks whose time range
+1. Series selection: the selector is resolved to series IDs through the series index.
+2. Partition pruning: only files of partitions that overlap the range are considered.
+3. Block pruning: within a file, a binary search on the index finds the blocks whose time range
    overlaps the query; no other block is touched.
-3. Each of those blocks is checksummed, decoded and trimmed to the range.
-4. Results are merged across files, oldest first, and then with the memtable. Where the same
-   timestamp appears more than once, the newest source wins.
+4. For raw points, each of those blocks is checksummed, decoded and trimmed to the range, and
+   the results are merged across files, oldest first, and then with the memtable. Where the
+   same timestamp appears more than once, the newest source wins.
 
-**Planned:** a series selector (measurement + tag filters) in front of step 1, and aggregates
-(`avg/min/max/sum/count` per time bucket) with push-down: a block that lies entirely inside one
-bucket is answered from its index entry and never decoded.
+### Aggregation push-down
+
+An aggregate keeps count, sum, min and max per bucket, which is enough to answer all five
+aggregates and to combine the buckets of several series. For each series, a block is answered
+from the statistics in its index entry, without being read, when all three hold:
+
+- the block lies entirely inside the query range;
+- all of it falls into a single bucket;
+- no other file, and not the memtable, holds points of that series within the block's time
+  span. Such points could overwrite points of the block, and the statistics would not know.
+
+Every other block is decoded and its points are bucketed one by one. The query reports how many
+blocks went each way.
+
+The second condition is the limit of this design: a block of 1024 points sampled every 10 s
+spans 2.8 hours, so a query with one-minute or one-hour buckets decodes everything. Smaller
+blocks (`block_points`) trade index size and a little compression for finer push-down; rollups
+would remove the limit and are not built.
+
+## HTTP API
+
+| Request | Purpose |
+|---|---|
+| `POST /write?precision=ns\|u\|ms\|s` | Body is Influx line protocol. `204` on success. A malformed line rejects the whole body with `400`. |
+| `GET /api/v1/query` | Parameters: `measurement`, `field`, `tag=key:value` (repeatable), `start`, `end` (ns), `agg`, `bucket` (ns), `group_by`. Returns JSON. |
+| `GET /api/v1/stats` | Series, block files, memtable points. |
+| `POST /api/v1/flush`, `POST /api/v1/compact` | Force a flush or a full compaction. |
+| `GET /health` | Liveness. |
+| `GET\|POST /query?q=` | Answers only `SHOW/CREATE/DROP DATABASE`, which the TSBS InfluxDB loader sends before writing. |
+
+```json
+{"results":[{"name":"host_0","timestamps":[1451606400000000000],"values":[58]}],
+ "stats":{"series":1,"blocks_from_stats":3,"blocks_decoded":0}}
+```
+
+For a raw query each result is one series and `name` is its key. For an aggregate each result is
+one group and `name` is the group's tag value. One request body is one WAL batch (bodies above
+500,000 points are split), so a write is all-or-nothing after a crash.
+
+The server uses [cpp-httplib](https://github.com/yhirose/cpp-httplib) and handles requests on a
+thread pool. The engine is single-threaded, so a mutex admits one request at a time.
 
 ## Concurrency
 
