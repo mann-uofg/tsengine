@@ -17,6 +17,7 @@ add_executable(tsengine_tests
   crc32c_test.cpp
   line_protocol_test.cpp
   memtable_test.cpp
+  query_test.cpp
   wal_test.cpp
 )
 target_link_libraries(tsengine_tests PRIVATE tsengine tsengine_options GTest::gtest_main)

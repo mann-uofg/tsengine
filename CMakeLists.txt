@@ -26,6 +26,7 @@ add_library(tsengine
   src/file_util.cpp
   src/line_protocol.cpp
   src/memtable.cpp
+  src/query.cpp
   src/version.cpp
   src/wal.cpp
 )
