@@ -14,6 +14,7 @@ add_executable(tsengine_tests
   block_file_test.cpp
   codec_test.cpp
   coding_test.cpp
+  crash_test.cpp
   crc32c_test.cpp
   engine_test.cpp
   line_protocol_test.cpp
