@@ -26,6 +26,28 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
 
+  # Loads data produced by the real TSBS generator through the real TSBS InfluxDB loader,
+  # then checks the contents, before and after a kill -9.
+  tsbs-load:
+    name: TSBS load
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build server
+        run: |
+          cmake --preset release
+          cmake --build --preset release --target tsengine_server
+      - name: Build TSBS
+        run: |
+          git clone --depth 1 https://github.com/timescale/tsbs.git /tmp/tsbs
+          mkdir -p /tmp/tsbs-bin
+          cd /tmp/tsbs
+          go build -o /tmp/tsbs-bin/ ./cmd/tsbs_generate_data ./cmd/tsbs_load_influx
+      - name: Load and verify
+        run: scripts/tsbs_smoke.sh build/release/tsengine_server /tmp/tsbs-bin
+
   format:
     runs-on: ubuntu-24.04
     steps:
