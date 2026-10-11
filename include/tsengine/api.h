@@ -46,10 +46,29 @@ struct QueryRequest {
   // Width of the time buckets of an aggregate. 0 means one bucket for the whole range.
   int64_t bucket_width_ns = 0;
   // For aggregates: a tag name. Series are combined per value of this tag. Empty combines
-  // all matching series into one result.
+  // all matching series into one result. The special name kGroupByField groups by field
+  // instead, which gives one result per metric.
   std::string group_by;
 };
 
+inline constexpr char kGroupByField[] = "__field__";
+
+// A write body after parsing: the distinct series it mentions and its points. Building one
+// does not touch the engine.
+struct ParsedBatch {
+  struct Point {
+    // Position of the point's series in `keys`.
+    uint32_t key = 0;
+    int64_t timestamp_ns = 0;
+    double value = 0.0;
+  };
+
+  std::vector<std::string> keys;
+  std::vector<Point> points;
+  uint64_t lines = 0;
+};
+
+// Not thread-safe, except for Parse, which is static and touches nothing shared.
 class Api {
  public:
   explicit Api(Engine* engine) : engine_(engine) {}
@@ -57,6 +76,11 @@ class Api {
   // Parses and stores a body of line protocol. If any line is malformed, nothing is stored
   // and the error names the line. A very large body is stored as several WAL batches.
   Status Write(const WriteRequest& request, WriteSummary* summary);
+
+  // The two halves of Write. Parsing is most of the work of a write and needs nothing from
+  // the engine, so a server can parse many requests at once and only take turns to store.
+  static Status Parse(const WriteRequest& request, ParsedBatch* batch);
+  Status Store(const ParsedBatch& batch, WriteSummary* summary);
 
   // Runs a query and writes the result as JSON:
   //
@@ -78,9 +102,8 @@ class Api {
 
  private:
   Engine* engine_;
-  // Reused between calls so a write does not allocate per line.
-  ParsedLine line_;
-  std::string key_;
+  // Reused between calls to Store.
+  std::vector<uint64_t> ids_;
   std::vector<Sample> samples_;
 };
 

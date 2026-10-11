@@ -105,11 +105,14 @@ void Server::Impl::Write(const httplib::Request& req, httplib::Response* res) {
       return;
     }
   }
-  WriteSummary summary;
-  Status s;
-  {
+  // Parse on this request's own thread, in parallel with other requests. Only storing the
+  // result needs the engine, and so the lock.
+  ParsedBatch batch;
+  Status s = Api::Parse(request, &batch);
+  if (s.ok()) {
+    WriteSummary summary;
     const std::lock_guard<std::mutex> lock(mutex);
-    s = api.Write(request, &summary);
+    s = api.Store(batch, &summary);
   }
   if (!s.ok()) {
     Fail(s, res);
@@ -215,6 +218,10 @@ void Server::Impl::Compact(const httplib::Request&, httplib::Response* res) {
 Server::Server(Engine* engine) : impl_(std::make_unique<Impl>(engine)) {
   Impl* impl = impl_.get();
   httplib::Server& http = impl->http;
+  // Send each response as soon as it is written. Without this, Nagle's algorithm holds the
+  // last small packet of a response until the client acknowledges the previous one, and the
+  // client delays that acknowledgement, which adds about 40 ms to every small request.
+  http.set_tcp_nodelay(true);
   http.Get("/health", impl->Route(&Impl::Health));
   http.Post("/write", impl->Route(&Impl::Write));
   http.Get("/query", impl->Route(&Impl::InfluxQuery));

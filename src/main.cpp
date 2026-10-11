@@ -62,6 +62,8 @@ bool ParseArgs(int argc, char** argv, Config* config) {
       config->options.memtable_flush_points = static_cast<size_t>(number);
     } else if (arg == "--block-points") {
       config->options.block_points = static_cast<size_t>(number);
+    } else if (arg == "--compaction-files") {
+      config->options.compaction_min_files = static_cast<size_t>(number);
     } else {
       return false;
     }

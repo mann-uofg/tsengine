@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <span>
+#include <unordered_map>
 
 #include "tsengine/query.h"
 
@@ -13,6 +15,12 @@ namespace {
 
 // A WAL record holds at most 16 MiB, which is about 699,000 samples.
 constexpr size_t kMaxSamplesPerBatch = 500000;
+
+// Lets a map with std::string keys be searched with a string_view.
+struct StringHash {
+  using is_transparent = void;
+  size_t operator()(std::string_view s) const { return std::hash<std::string_view>()(s); }
+};
 
 void AppendJsonString(std::string_view text, std::string* out) {
   static constexpr char kHex[] = "0123456789abcdef";
@@ -108,8 +116,24 @@ bool ParseAggregateKind(std::string_view text, AggregateKind* kind) {
 }
 
 Status Api::Write(const WriteRequest& request, WriteSummary* summary) {
-  *summary = WriteSummary();
-  samples_.clear();
+  ParsedBatch batch;
+  Status s = Parse(request, &batch);
+  if (!s.ok()) {
+    *summary = WriteSummary();
+    return s;
+  }
+  return Store(batch, summary);
+}
+
+Status Api::Parse(const WriteRequest& request, ParsedBatch* batch) {
+  batch->keys.clear();
+  batch->points.clear();
+  batch->lines = 0;
+  // Series key -> its position in batch->keys. A body usually repeats the same few series
+  // many times, so each distinct key is stored once.
+  std::unordered_map<std::string, uint32_t, StringHash, std::equal_to<>> key_index;
+  ParsedLine line;
+  std::string key;
   const std::string_view body = request.body;
   uint64_t line_number = 0;
   size_t pos = 0;
@@ -128,28 +152,46 @@ Status Api::Write(const WriteRequest& request, WriteSummary* summary) {
       continue;
     }
 
-    Status s = ParseLine(text, &line_);
+    Status s = ParseLine(text, &line);
     if (!s.ok()) {
       return Status::InvalidArgument("line " + std::to_string(line_number) + ": " + s.message());
     }
     int64_t timestamp = request.now_ns;
-    if (line_.has_timestamp) {
-      timestamp = line_.timestamp_ns * request.timestamp_unit_ns;
+    if (line.has_timestamp) {
+      timestamp = line.timestamp_ns * request.timestamp_unit_ns;
     }
     // Every field of the line is a series of its own.
-    for (const LineField& field : line_.fields) {
-      key_.clear();
-      AppendSeriesKey(line_, field.key, &key_);
-      Sample sample;
-      s = engine_->GetOrCreateSeries(key_, &sample.series_id);
-      if (!s.ok()) {
-        return s;
+    for (const LineField& field : line.fields) {
+      key.clear();
+      AppendSeriesKey(line, field.key, &key);
+      auto it = key_index.find(std::string_view(key));
+      if (it == key_index.end()) {
+        it = key_index.emplace(key, static_cast<uint32_t>(batch->keys.size())).first;
+        batch->keys.push_back(key);
       }
-      sample.timestamp_ns = timestamp;
-      sample.value = field.value;
-      samples_.push_back(sample);
+      batch->points.push_back(ParsedBatch::Point{it->second, timestamp, field.value});
     }
-    ++summary->lines;
+    ++batch->lines;
+  }
+  return Status::OK();
+}
+
+Status Api::Store(const ParsedBatch& batch, WriteSummary* summary) {
+  *summary = WriteSummary();
+  // Resolve each distinct series once, then turn the points into samples.
+  ids_.clear();
+  for (const std::string& key : batch.keys) {
+    uint64_t id = 0;
+    Status s = engine_->GetOrCreateSeries(key, &id);
+    if (!s.ok()) {
+      return s;
+    }
+    ids_.push_back(id);
+  }
+  samples_.clear();
+  samples_.reserve(batch.points.size());
+  for (const ParsedBatch::Point& point : batch.points) {
+    samples_.push_back(Sample{ids_[point.key], point.timestamp_ns, point.value});
   }
 
   const std::span<const Sample> all(samples_);
@@ -160,6 +202,7 @@ Status Api::Write(const WriteRequest& request, WriteSummary* summary) {
       return s;
     }
   }
+  summary->lines = batch.lines;
   summary->points = samples_.size();
   return Status::OK();
 }
@@ -204,7 +247,12 @@ Status Api::Query(const QueryRequest& request, std::string* json) {
         continue;
       }
       std::string group;
-      if (!request.group_by.empty()) {
+      if (request.group_by == kGroupByField) {
+        SeriesKeyParts parts;
+        if (ParseSeriesKey(index.KeyOf(id), &parts).ok()) {
+          group = parts.field;
+        }
+      } else if (!request.group_by.empty()) {
         group = index.TagValue(id, request.group_by);
       }
       std::map<int64_t, Bucket>& combined = groups[group];

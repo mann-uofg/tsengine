@@ -142,6 +142,18 @@ TEST_F(ApiTest, AggregateGroupsByTag) {
   EXPECT_EQ(Query(), Envelope(Result("a", "0", "2") + "," + Result("b", "0", "8"), 2));
 }
 
+TEST_F(ApiTest, AggregateGroupsByField) {
+  ASSERT_NO_FATAL_FAILURE(WriteCpuData());
+  query_.selector.measurement = "cpu";
+  query_.aggregate = AggregateKind::kMax;
+  query_.range = TimeRange{0, 100};
+  query_.group_by = kGroupByField;
+  Where("host", {"a"});
+  const std::string system = Result("system", "0", "30");
+  const std::string user = Result("user", "0", "3");
+  EXPECT_EQ(Query(), Envelope(system + "," + user, 2));
+}
+
 TEST_F(ApiTest, AggregateReportsPushDown) {
   std::string body;
   for (int t = 0; t < 3000; ++t) {
@@ -172,9 +184,11 @@ TEST_F(ApiTest, OneBadLineRejectsTheWholeBody) {
   const Status s = Write("cpu value=1 10\ncpu value=oops 20\ncpu value=3 30\n");
   EXPECT_EQ(s.code(), Status::Code::kInvalidArgument);
   EXPECT_TRUE(Contains(s.message(), "line 2")) << s.message();
-  // The series named on the first line exists now, but it has no points.
+  // The whole body is parsed before anything is stored, so not even the series named on the
+  // good first line was created.
   query_.selector.measurement = "cpu";
-  EXPECT_EQ(Query(), Envelope("", 1));
+  EXPECT_EQ(Query(), Envelope("", 0));
+  EXPECT_EQ(engine_->series_count(), 0U);
 }
 
 TEST_F(ApiTest, TimestampUnitAndDefaultTimestamp) {
