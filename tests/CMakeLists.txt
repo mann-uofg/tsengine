@@ -11,6 +11,7 @@ include(GoogleTest)
 
 add_executable(tsengine_tests
   aggregate_test.cpp
+  api_test.cpp
   bitstream_test.cpp
   block_file_test.cpp
   codec_test.cpp
@@ -27,3 +28,12 @@ add_executable(tsengine_tests
 )
 target_link_libraries(tsengine_tests PRIVATE tsengine tsengine_options GTest::gtest_main)
 gtest_discover_tests(tsengine_tests)
+
+if(TSENGINE_BUILD_SERVER)
+  add_executable(tsengine_server_tests
+    server_test.cpp
+  )
+  target_link_libraries(tsengine_server_tests
+    PRIVATE tsengine_http tsengine_options httplib::httplib GTest::gtest_main)
+  gtest_discover_tests(tsengine_server_tests)
+endif()
