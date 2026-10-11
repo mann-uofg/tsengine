@@ -230,7 +230,11 @@ one group and `name` is the group's tag value. One request body is one WAL batch
 500,000 points are split), so a write is all-or-nothing after a crash.
 
 The server uses [cpp-httplib](https://github.com/yhirose/cpp-httplib) and handles requests on a
-thread pool. The engine is single-threaded, so a mutex admits one request at a time.
+thread pool. The engine is single-threaded, so a mutex admits one request at a time to it. A
+write is split in two for that reason: parsing the line protocol, which is most of the work and
+touches nothing shared, runs on the request's own thread, and only storing the parsed points
+takes the mutex. Measured on the TSBS load, that change took ingest from 2.9 to 6.6 million
+points per second.
 
 ## Concurrency
 
