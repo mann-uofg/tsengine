@@ -11,6 +11,7 @@ include(GoogleTest)
 
 add_executable(tsengine_tests
   bitstream_test.cpp
+  block_file_test.cpp
   codec_test.cpp
   coding_test.cpp
   crc32c_test.cpp

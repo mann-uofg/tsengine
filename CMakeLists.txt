@@ -20,6 +20,7 @@ if(TSENGINE_SANITIZE)
 endif()
 
 add_library(tsengine
+  src/block_file.cpp
   src/codec.cpp
   src/crc32c.cpp
   src/file_util.cpp
