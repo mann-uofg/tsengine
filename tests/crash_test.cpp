@@ -114,6 +114,7 @@ struct ExitAtPoint {
 
 struct ChildResult {
   bool started = false;
+  // True only if the child died from the SIGKILL this test sent, not from a crash of its own.
   bool killed = false;
   int exit_code = -1;
   std::vector<uint64_t> acked;
@@ -145,7 +146,7 @@ ChildResult RunChild(const WriterJob& job, int kill_after_ms) {
   }
   int status = 0;
   ::waitpid(pid, &status, 0);
-  result.killed = WIFSIGNALED(status);
+  result.killed = WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL;
   if (WIFEXITED(status)) {
     result.exit_code = WEXITSTATUS(status);
   }
