@@ -3,8 +3,9 @@
 A time-series storage engine in C++20: write-ahead log, time-partitioned columnar blocks with
 Gorilla compression, and aggregation push-down. Benchmarked against TimescaleDB on TSBS.
 
-> **Status: M2 (durability and lifecycle) is next.** The WAL, the compressed block files, the
-> memtable and range queries are built and tested, but not yet wired into one engine.
+> **Status: the storage engine works; M3 (aggregation, HTTP API, TSBS ingest) is next.** Writes go
+> through a WAL into time-partitioned, compressed block files, with compaction, retention and
+> crash recovery. There is no network API yet and nothing has been benchmarked.
 > Results, architecture diagram and limitations land here as the milestones do.
 
 ## Results
@@ -33,6 +34,6 @@ Use the `release` preset for benchmarks.
 |---|---|---|
 | M0 | Build, CI, design doc, line protocol parser, WAL write + replay | done |
 | M1 | Memtable, flush to blocks, delta-of-delta + Gorilla encoders, range queries | done |
-| M2 | Time partitions, retention, compaction, crash-recovery fault injection | |
+| M2 | Time partitions, retention, compaction, crash-recovery fault injection | done |
 | M3 | Aggregations with push-down, HTTP API, TSBS ingest | |
 | M4 | TSBS benchmarks vs TimescaleDB, plots | |
