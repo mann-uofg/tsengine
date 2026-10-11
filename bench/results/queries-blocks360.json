@@ -1,0 +1,229 @@
+{
+  "label": "blocks360",
+  "passes": 5,
+  "queries_per_type": 1000,
+  "seed": 42,
+  "types": [
+    {
+      "type": "single-groupby-1-1-1",
+      "about": "max of 1 metric, 1 host, per minute, over 1 hour",
+      "queries": 1000,
+      "verified": 1000,
+      "mismatches": 0,
+      "result_points_per_query": 60,
+      "tsengine_blocks_from_stats": 0,
+      "tsengine_blocks_decoded": 1995,
+      "latency": {
+        "timescaledb": {
+          "samples": 5000,
+          "min_ms": 0.862849,
+          "p50_ms": 1.102609,
+          "p95_ms": 1.476226,
+          "p99_ms": 1.79107,
+          "max_ms": 3.953561,
+          "mean_ms": 1.1541021074000006,
+          "pass_p50_ms": [
+            1.100551,
+            1.093579,
+            1.082985,
+            1.120354,
+            1.114851
+          ]
+        },
+        "tsengine": {
+          "samples": 5000,
+          "min_ms": 0.148202,
+          "p50_ms": 0.187944,
+          "p95_ms": 0.24908,
+          "p99_ms": 0.378972,
+          "max_ms": 0.638678,
+          "mean_ms": 0.19665991619999967,
+          "pass_p50_ms": [
+            0.185058,
+            0.187124,
+            0.189789,
+            0.188418,
+            0.189948
+          ]
+        }
+      }
+    },
+    {
+      "type": "single-groupby-1-1-12",
+      "about": "max of 1 metric, 1 host, per minute, over 12 hours",
+      "queries": 1000,
+      "verified": 1000,
+      "mismatches": 0,
+      "result_points_per_query": 720,
+      "tsengine_blocks_from_stats": 0,
+      "tsengine_blocks_decoded": 12999,
+      "latency": {
+        "timescaledb": {
+          "samples": 5000,
+          "min_ms": 1.832983,
+          "p50_ms": 2.260285,
+          "p95_ms": 2.766904,
+          "p99_ms": 3.140338,
+          "max_ms": 5.721901,
+          "mean_ms": 2.309925440600004,
+          "pass_p50_ms": [
+            2.306724,
+            2.170928,
+            2.295549,
+            2.359303,
+            2.127765
+          ]
+        },
+        "tsengine": {
+          "samples": 5000,
+          "min_ms": 0.273851,
+          "p50_ms": 0.362567,
+          "p95_ms": 0.500013,
+          "p99_ms": 0.678562,
+          "max_ms": 2.544611,
+          "mean_ms": 0.3798431934000002,
+          "pass_p50_ms": [
+            0.351492,
+            0.345812,
+            0.362351,
+            0.373308,
+            0.372443
+          ]
+        }
+      }
+    },
+    {
+      "type": "single-groupby-1-8-1",
+      "about": "max of 1 metric, 8 hosts, per minute, over 1 hour",
+      "queries": 1000,
+      "verified": 1000,
+      "mismatches": 0,
+      "result_points_per_query": 60,
+      "tsengine_blocks_from_stats": 0,
+      "tsengine_blocks_decoded": 15960,
+      "latency": {
+        "timescaledb": {
+          "samples": 5000,
+          "min_ms": 1.236247,
+          "p50_ms": 1.579295,
+          "p95_ms": 2.026318,
+          "p99_ms": 2.315011,
+          "max_ms": 3.331503,
+          "mean_ms": 1.6169304721999977,
+          "pass_p50_ms": [
+            1.558983,
+            1.505254,
+            1.568425,
+            1.660158,
+            1.615068
+          ]
+        },
+        "tsengine": {
+          "samples": 5000,
+          "min_ms": 0.20898,
+          "p50_ms": 0.289639,
+          "p95_ms": 0.376842,
+          "p99_ms": 0.499681,
+          "max_ms": 0.694665,
+          "mean_ms": 0.3020746814,
+          "pass_p50_ms": [
+            0.285844,
+            0.292382,
+            0.290563,
+            0.290925,
+            0.287573
+          ]
+        }
+      }
+    },
+    {
+      "type": "cpu-max-all-1",
+      "about": "max of all 10 metrics, 1 host, per hour, over 8 hours",
+      "queries": 1000,
+      "verified": 1000,
+      "mismatches": 0,
+      "result_points_per_query": 89,
+      "tsengine_blocks_from_stats": 70020,
+      "tsengine_blocks_decoded": 19960,
+      "latency": {
+        "timescaledb": {
+          "samples": 5000,
+          "min_ms": 1.731879,
+          "p50_ms": 2.409643,
+          "p95_ms": 2.993014,
+          "p99_ms": 3.380931,
+          "max_ms": 7.707141,
+          "mean_ms": 2.4445959883999917,
+          "pass_p50_ms": [
+            2.448181,
+            2.357671,
+            2.329612,
+            2.488538,
+            2.413747
+          ]
+        },
+        "tsengine": {
+          "samples": 5000,
+          "min_ms": 0.183298,
+          "p50_ms": 0.2899,
+          "p95_ms": 0.38999,
+          "p99_ms": 0.503251,
+          "max_ms": 1.172057,
+          "mean_ms": 0.3034089528,
+          "pass_p50_ms": [
+            0.293527,
+            0.291902,
+            0.287322,
+            0.285037,
+            0.290847
+          ]
+        }
+      }
+    },
+    {
+      "type": "double-groupby-1",
+      "about": "mean of 1 metric per host, all hosts, per hour, over 12 hours",
+      "queries": 1000,
+      "verified": 1000,
+      "mismatches": 0,
+      "result_points_per_query": 1299,
+      "tsengine_blocks_from_stats": 1100100,
+      "tsengine_blocks_decoded": 199800,
+      "latency": {
+        "timescaledb": {
+          "samples": 5000,
+          "min_ms": 23.85193,
+          "p50_ms": 27.207296,
+          "p95_ms": 31.582164,
+          "p99_ms": 34.461088,
+          "max_ms": 65.912884,
+          "mean_ms": 27.436284032399975,
+          "pass_p50_ms": [
+            27.130459,
+            27.298747,
+            27.191031,
+            27.315085,
+            27.115542
+          ]
+        },
+        "tsengine": {
+          "samples": 5000,
+          "min_ms": 0.433705,
+          "p50_ms": 1.459792,
+          "p95_ms": 1.813074,
+          "p99_ms": 2.081146,
+          "max_ms": 2.894997,
+          "mean_ms": 1.5022894025999995,
+          "pass_p50_ms": [
+            1.463876,
+            1.396761,
+            1.36978,
+            1.493689,
+            1.514848
+          ]
+        }
+      }
+    }
+  ],
+  "warmups": 1
+}

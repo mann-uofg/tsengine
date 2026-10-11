@@ -1,0 +1,16 @@
+system=timescaledb
+label=run3
+rows=2592000
+points=25920000
+workers=4
+batch_size=10000
+version=PostgreSQL 16.6
+shared_buffers=3892MB
+load_seconds=5.187
+metrics_per_sec=4997456.48
+extension=2.17.2
+chunks=6
+bytes_uncompressed=512483328
+bytes_tags=114688
+rows_stored=2592000
+container_memory=663.7MiB / 15.21GiB

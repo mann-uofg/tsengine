@@ -1,0 +1,6 @@
+bytes_uncompressed=511131648
+compress_seconds=4.29492
+bytes_compressed=26853376
+chunks=6
+compressed_chunks=6
+rows_stored=2592000
