@@ -44,4 +44,14 @@ Status ParseLine(std::string_view line, ParsedLine* out);
 // Each field of a line is its own series, so a line with N fields has N series keys.
 void AppendSeriesKey(const ParsedLine& line, std::string_view field_key, std::string* out);
 
+// The pieces of a canonical series key. The string_views point into the key.
+struct SeriesKeyParts {
+  std::string_view measurement;
+  std::vector<std::pair<std::string_view, std::string_view>> tags;
+  std::string_view field;
+};
+
+// Splits a key produced by AppendSeriesKey back into its measurement, tags and field.
+Status ParseSeriesKey(std::string_view key, SeriesKeyParts* out);
+
 }  // namespace tsengine

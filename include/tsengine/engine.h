@@ -13,6 +13,8 @@
 #include "tsengine/block_file.h"
 #include "tsengine/manifest.h"
 #include "tsengine/memtable.h"
+#include "tsengine/query.h"
+#include "tsengine/series_index.h"
 #include "tsengine/status.h"
 #include "tsengine/types.h"
 #include "tsengine/wal.h"
@@ -34,6 +36,12 @@ struct EngineOptions {
   // A partition is compacted when a run of at least this many similar-sized files has built
   // up in it. 0 or 1 turns automatic compaction off.
   size_t compaction_min_files = 4;
+
+  // Points per block in new block files, from 1 to kMaxBlockPoints. An aggregate query can
+  // answer from a block's statistics only if the whole block falls into one time bucket, so
+  // smaller blocks help queries with narrow buckets, at the cost of a larger index and
+  // slightly worse compression.
+  size_t block_points = kMaxBlockPoints;
 
   // For tests only. Called with a name at certain points inside flush, compaction and
   // write, so a test can kill the process exactly there.
@@ -70,8 +78,15 @@ class Engine {
   // a crash; a batch is recovered completely or not at all.
   Status Write(std::span<const Sample> samples);
 
+  // Finds series by measurement, field and tags.
+  const SeriesIndex& series() const { return index_; }
+
   // Replaces `out` with the points of one series inside `range`, in time order.
   Status Query(uint64_t series_id, TimeRange range, Points* out) const;
+
+  // Count, sum, min and max of one series per time bucket. Blocks that fall entirely into
+  // one bucket are answered from their statistics without being read; see query.h.
+  Status Aggregate(const AggregateRequest& request, AggregateResult* out) const;
 
   // Writes the memtable to block files and discards the WAL segments that covered it.
   Status Flush();
@@ -123,6 +138,9 @@ class Engine {
   // state may no longer match the disk, and reopening the database is the way to recover.
   Status Guard(Status s);
 
+  // The block files of the partitions that overlap `range`, oldest first.
+  std::vector<const BlockFileReader*> FilesOverlapping(TimeRange range) const;
+
   int64_t PartitionOf(int64_t timestamp_ns) const;
   std::string ManifestPath() const;
   std::string SeriesLogPath() const;
@@ -146,6 +164,7 @@ class Engine {
   std::unique_ptr<WalWriter> series_log_;
   std::unordered_map<std::string, uint64_t, StringHash, std::equal_to<>> series_ids_;
   uint64_t next_series_id_ = 1;
+  SeriesIndex index_;
 };
 
 }  // namespace tsengine

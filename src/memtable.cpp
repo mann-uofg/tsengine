@@ -14,6 +14,13 @@ void Memtable::Append(uint64_t series_id, int64_t timestamp_ns, double value) {
   if (!timestamps.empty() && timestamp_ns <= timestamps.back()) {
     series.ordered = false;
   }
+  if (timestamps.empty()) {
+    series.min_timestamp = timestamp_ns;
+    series.max_timestamp = timestamp_ns;
+  } else {
+    series.min_timestamp = std::min(series.min_timestamp, timestamp_ns);
+    series.max_timestamp = std::max(series.max_timestamp, timestamp_ns);
+  }
   series.points.Append(timestamp_ns, value);
   ++point_count_;
 }
@@ -56,6 +63,16 @@ void Memtable::ReadRange(uint64_t series_id, TimeRange range, Points* out) const
       out->Append(order[i].first, series.points.values[order[i].second]);
     }
   }
+}
+
+bool Memtable::TimeBounds(uint64_t series_id, TimeRange* bounds) const {
+  const auto it = series_.find(series_id);
+  if (it == series_.end()) {
+    return false;
+  }
+  bounds->min = it->second.min_timestamp;
+  bounds->max = it->second.max_timestamp;
+  return true;
 }
 
 Status FlushMemtable(const Memtable& memtable, const std::string& path) {

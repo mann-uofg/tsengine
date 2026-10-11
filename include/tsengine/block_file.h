@@ -68,6 +68,11 @@ class BlockFileWriter {
   // Writes the index and footer, syncs the file and renames it into place.
   Status Finish();
 
+  // Sets how many points go into one block, from 1 to kMaxBlockPoints. Smaller blocks cost
+  // more index entries and compress a little worse, but let a query skip or summarise data
+  // in finer steps. Call before the first AddSeries.
+  void set_points_per_block(size_t points);
+
  private:
   BlockFileWriter(int fd, std::string path);
 
@@ -86,6 +91,7 @@ class BlockFileWriter {
   uint64_t last_series_id_ = 0;
   bool finished_ = false;
   bool failed_ = false;
+  size_t points_per_block_ = kMaxBlockPoints;
 };
 
 // Reads a block file through a memory mapping. Safe to use from several threads at once:
@@ -109,6 +115,11 @@ class BlockFileReader {
   // Appends to `out` every point of `series_id` inside `range`, in time order. Only blocks
   // whose time range overlaps `range` are decoded.
   Status ReadRange(uint64_t series_id, TimeRange range, Points* out) const;
+
+  // Appends to `out` the index entries of the blocks of `series_id` whose time range overlaps
+  // `range`, in time order, without reading any block. The pointers stay valid for as long
+  // as the reader does.
+  void FindBlocks(uint64_t series_id, TimeRange range, std::vector<const BlockMeta*>* out) const;
 
  private:
   BlockFileReader(std::string path, void* map, size_t size);

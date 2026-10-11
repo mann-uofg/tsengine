@@ -154,6 +154,42 @@ TEST(LineProtocol, RejectsUnsupportedFieldTypes) {
   ExpectRejected("cpu value=inf");
 }
 
+TEST(LineProtocol, SeriesKeySplitsBackIntoItsParts) {
+  ParsedLine line;
+  ASSERT_TRUE(ParseLine("cpu,region=us,host=a\\ b usage\\ user=1,idle=2 7", &line).ok());
+  const std::string key = SeriesKey(line, line.fields[0].key);
+  EXPECT_EQ(key, "cpu,host=a\\ b,region=us usage\\ user");
+
+  SeriesKeyParts parts;
+  const Status s = ParseSeriesKey(key, &parts);
+  ASSERT_TRUE(s.ok()) << s.ToString();
+  EXPECT_EQ(parts.measurement, "cpu");
+  ASSERT_EQ(parts.tags.size(), 2U);
+  EXPECT_EQ(parts.tags[0].first, "host");
+  EXPECT_EQ(parts.tags[0].second, "a\\ b");
+  EXPECT_EQ(parts.tags[1].first, "region");
+  EXPECT_EQ(parts.tags[1].second, "us");
+  EXPECT_EQ(parts.field, "usage\\ user");
+}
+
+TEST(LineProtocol, SeriesKeyWithoutTags) {
+  SeriesKeyParts parts;
+  ASSERT_TRUE(ParseSeriesKey("mem used", &parts).ok());
+  EXPECT_EQ(parts.measurement, "mem");
+  EXPECT_TRUE(parts.tags.empty());
+  EXPECT_EQ(parts.field, "used");
+}
+
+TEST(LineProtocol, RejectsMalformedSeriesKeys) {
+  SeriesKeyParts parts;
+  EXPECT_FALSE(ParseSeriesKey("", &parts).ok());
+  EXPECT_FALSE(ParseSeriesKey("cpu", &parts).ok());
+  EXPECT_FALSE(ParseSeriesKey("cpu ", &parts).ok());
+  EXPECT_FALSE(ParseSeriesKey("cpu,host=a", &parts).ok());
+  EXPECT_FALSE(ParseSeriesKey("cpu,host field", &parts).ok());
+  EXPECT_FALSE(ParseSeriesKey(",host=a field", &parts).ok());
+}
+
 // Cheap fuzzing: random strings glued together from the pieces the parser cares about. The
 // sanitizers catch any out-of-bounds read; the assertions check accepted lines are well formed.
 TEST(LineProtocol, RandomInputNeverCrashes) {

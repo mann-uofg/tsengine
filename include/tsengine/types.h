@@ -8,6 +8,16 @@
 
 namespace tsengine {
 
+// Division that rounds towards negative infinity, so that negative timestamps fall into the
+// right partition or bucket. `b` must be positive.
+inline int64_t FloorDiv(int64_t a, int64_t b) {
+  int64_t q = a / b;
+  if (a % b != 0 && a < 0) {
+    --q;
+  }
+  return q;
+}
+
 // A closed time interval: both ends are included. The default covers all of time.
 struct TimeRange {
   int64_t min = std::numeric_limits<int64_t>::min();

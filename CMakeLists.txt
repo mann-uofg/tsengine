@@ -29,6 +29,7 @@ add_library(tsengine
   src/manifest.cpp
   src/memtable.cpp
   src/query.cpp
+  src/series_index.cpp
   src/version.cpp
   src/wal.cpp
 )

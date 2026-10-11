@@ -74,10 +74,40 @@ Status ParseFieldValue(std::string_view text, double* value) {
   return Status::OK();
 }
 
+// Parses the "measurement,tag1=a,tag2=b" that both a line and a series key start with, into
+// out->measurement and out->tags. On return *end is the index of the space that follows it,
+// or text.size() if nothing follows.
+template <typename T>
+Status ParseMeasurementAndTags(std::string_view text, T* out, size_t* end) {
+  out->tags.clear();
+  size_t pos = FindUnescaped(text, 0, ", ");
+  if (pos == 0) {
+    return Status::InvalidArgument("missing measurement");
+  }
+  out->measurement = text.substr(0, pos);
+
+  while (pos < text.size() && text[pos] == ',') {
+    const size_t key_begin = pos + 1;
+    const size_t eq = FindUnescaped(text, key_begin, "=, ");
+    if (eq >= text.size() || text[eq] != '=') {
+      return Status::InvalidArgument("tag is missing '='");
+    }
+    const size_t value_begin = eq + 1;
+    const size_t value_end = FindUnescaped(text, value_begin, ", ");
+    if (eq == key_begin || value_end == value_begin) {
+      return Status::InvalidArgument("tag has an empty key or value");
+    }
+    out->tags.emplace_back(text.substr(key_begin, eq - key_begin),
+                           text.substr(value_begin, value_end - value_begin));
+    pos = value_end;
+  }
+  *end = pos;
+  return Status::OK();
+}
+
 }  // namespace
 
 Status ParseLine(std::string_view line, ParsedLine* out) {
-  out->tags.clear();
   out->fields.clear();
   out->has_timestamp = false;
   out->timestamp_ns = 0;
@@ -85,28 +115,10 @@ Status ParseLine(std::string_view line, ParsedLine* out) {
     line.remove_suffix(1);
   }
 
-  // Measurement: everything up to the first unescaped comma or space.
-  size_t pos = FindUnescaped(line, 0, ", ");
-  if (pos == 0) {
-    return Status::InvalidArgument("missing measurement");
-  }
-  out->measurement = line.substr(0, pos);
-
-  // Tags: zero or more ",key=value".
-  while (pos < line.size() && line[pos] == ',') {
-    const size_t key_begin = pos + 1;
-    const size_t eq = FindUnescaped(line, key_begin, "=, ");
-    if (eq >= line.size() || line[eq] != '=') {
-      return Status::InvalidArgument("tag is missing '='");
-    }
-    const size_t value_begin = eq + 1;
-    const size_t value_end = FindUnescaped(line, value_begin, ", ");
-    if (eq == key_begin || value_end == value_begin) {
-      return Status::InvalidArgument("tag has an empty key or value");
-    }
-    out->tags.emplace_back(line.substr(key_begin, eq - key_begin),
-                           line.substr(value_begin, value_end - value_begin));
-    pos = value_end;
+  size_t pos = 0;
+  Status s = ParseMeasurementAndTags(line, out, &pos);
+  if (!s.ok()) {
+    return s;
   }
   if (pos >= line.size()) {
     return Status::InvalidArgument("missing fields");
@@ -126,7 +138,7 @@ Status ParseLine(std::string_view line, ParsedLine* out) {
     }
     LineField field;
     field.key = line.substr(pos, eq - pos);
-    Status s = ParseFieldValue(line.substr(value_begin, value_end - value_begin), &field.value);
+    s = ParseFieldValue(line.substr(value_begin, value_end - value_begin), &field.value);
     if (!s.ok()) {
       return s;
     }
@@ -166,6 +178,20 @@ void AppendSeriesKey(const ParsedLine& line, std::string_view field_key, std::st
   }
   out->push_back(' ');
   out->append(field_key);
+}
+
+Status ParseSeriesKey(std::string_view key, SeriesKeyParts* out) {
+  size_t pos = 0;
+  Status s = ParseMeasurementAndTags(key, out, &pos);
+  if (!s.ok()) {
+    return s;
+  }
+  // Exactly one space, then the field name, which runs to the end of the key.
+  if (pos + 1 >= key.size() || key[pos] != ' ') {
+    return Status::InvalidArgument("series key has no field name");
+  }
+  out->field = key.substr(pos + 1);
+  return Status::OK();
 }
 
 }  // namespace tsengine

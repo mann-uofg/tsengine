@@ -17,16 +17,6 @@ constexpr std::string_view kWalExtension = ".wal";
 constexpr std::string_view kBlockExtension = ".tsb";
 constexpr std::string_view kTempExtension = ".tmp";
 
-// Division that rounds towards negative infinity, so timestamps before 1970 land in the
-// right partition. `b` must be positive.
-int64_t FloorDiv(int64_t a, int64_t b) {
-  int64_t q = a / b;
-  if (a % b != 0 && a < 0) {
-    --q;
-  }
-  return q;
-}
-
 // 42 -> "00000042.wal"
 std::string NumberedName(uint64_t number, std::string_view extension) {
   const std::string digits = std::to_string(number);
@@ -242,6 +232,7 @@ Status Engine::RecoverSeries() {
   }
   for (auto& entry : collector.series) {
     next_series_id_ = std::max(next_series_id_, entry.second + 1);
+    index_.Add(entry.second, entry.first);
     series_ids_.emplace(std::move(entry.first), entry.second);
   }
   // A torn record at the end is a series that was being created when the process died. No
@@ -302,6 +293,7 @@ Status Engine::GetOrCreateSeries(std::string_view key, uint64_t* series_id) {
     return s;
   }
   *series_id = next_series_id_;
+  index_.Add(next_series_id_, key);
   series_ids_.emplace(std::string(key), next_series_id_);
   ++next_series_id_;
   return Status::OK();
@@ -349,8 +341,20 @@ Status Engine::Query(uint64_t series_id, TimeRange range, Points* out) const {
   if (range.min > range.max) {
     return Status::OK();
   }
-  // Partition pruning: a file can only hold points of its own partition, so files of
-  // partitions outside the range are not even opened.
+  return QueryRange(FilesOverlapping(range), &memtable_, series_id, range, out);
+}
+
+Status Engine::Aggregate(const AggregateRequest& request, AggregateResult* out) const {
+  out->buckets.clear();
+  if (request.range.min > request.range.max) {
+    return Status::OK();
+  }
+  return AggregateSeries(FilesOverlapping(request.range), &memtable_, request, out);
+}
+
+// Partition pruning: a file can only hold points of its own partition, so the files of
+// partitions outside the range are never looked at.
+std::vector<const BlockFileReader*> Engine::FilesOverlapping(TimeRange range) const {
   const int64_t first = PartitionOf(range.min);
   const int64_t last = PartitionOf(range.max);
   std::vector<const BlockFileReader*> inputs;
@@ -359,7 +363,7 @@ Status Engine::Query(uint64_t series_id, TimeRange range, Points* out) const {
       inputs.push_back(file.reader.get());
     }
   }
-  return QueryRange(inputs, &memtable_, series_id, range, out);
+  return inputs;
 }
 
 Status Engine::Flush() {
@@ -446,6 +450,7 @@ Status Engine::FlushMemtableToFiles() {
         if (!s.ok()) {
           return s;
         }
+        output.writer->set_points_per_block(options_.block_points);
       }
       CopySlice(points, begin, end, &slice);
       Status s = output.writer->AddSeries(series_id, slice);
@@ -567,6 +572,7 @@ Status Engine::CompactRun(size_t begin, size_t end) {
   if (!s.ok()) {
     return s;
   }
+  writer->set_points_per_block(options_.block_points);
   // One series at a time, so memory use is bounded by the largest series in the partition.
   // The inputs are ordered oldest first, which is what makes the newest write win.
   Points points;

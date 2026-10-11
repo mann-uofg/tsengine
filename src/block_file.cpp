@@ -131,8 +131,8 @@ Status BlockFileWriter::AddSeries(uint64_t series_id, const Points& points) {
 
   const std::span<const int64_t> all_timestamps(points.timestamps);
   const std::span<const double> all_values(points.values);
-  for (size_t begin = 0; begin < all_timestamps.size(); begin += kMaxBlockPoints) {
-    const size_t n = std::min(kMaxBlockPoints, all_timestamps.size() - begin);
+  for (size_t begin = 0; begin < all_timestamps.size(); begin += points_per_block_) {
+    const size_t n = std::min(points_per_block_, all_timestamps.size() - begin);
     const std::span<const int64_t> timestamps = all_timestamps.subspan(begin, n);
     const std::span<const double> values = all_values.subspan(begin, n);
 
@@ -167,6 +167,10 @@ Status BlockFileWriter::AddSeries(uint64_t series_id, const Points& points) {
     }
   }
   return Status::OK();
+}
+
+void BlockFileWriter::set_points_per_block(size_t points) {
+  points_per_block_ = std::clamp(points, size_t{1}, kMaxBlockPoints);
 }
 
 Status BlockFileWriter::FlushBuffer() {
@@ -320,9 +324,10 @@ Status BlockFileReader::ReadBlock(const BlockMeta& meta, Points* out) const {
   return Status::OK();
 }
 
-Status BlockFileReader::ReadRange(uint64_t series_id, TimeRange range, Points* out) const {
+void BlockFileReader::FindBlocks(uint64_t series_id, TimeRange range,
+                                 std::vector<const BlockMeta*>* out) const {
   if (range.min > range.max) {
-    return Status::OK();
+    return;
   }
   // Binary search for the first block that could hold a point at or after range.min.
   size_t lo = 0;
@@ -335,13 +340,21 @@ Status BlockFileReader::ReadRange(uint64_t series_id, TimeRange range, Points* o
       hi = mid;
     }
   }
-  Points block;
   for (size_t i = lo; i < blocks_.size(); ++i) {
     const BlockMeta& meta = blocks_[i];
     if (meta.series_id != series_id || meta.min_timestamp > range.max) {
       break;
     }
-    Status s = ReadBlock(meta, &block);
+    out->push_back(&meta);
+  }
+}
+
+Status BlockFileReader::ReadRange(uint64_t series_id, TimeRange range, Points* out) const {
+  std::vector<const BlockMeta*> overlapping;
+  FindBlocks(series_id, range, &overlapping);
+  Points block;
+  for (const BlockMeta* meta : overlapping) {
+    Status s = ReadBlock(*meta, &block);
     if (!s.ok()) {
       return s;
     }

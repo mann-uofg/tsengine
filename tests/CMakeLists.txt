@@ -10,6 +10,7 @@ FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
 add_executable(tsengine_tests
+  aggregate_test.cpp
   bitstream_test.cpp
   block_file_test.cpp
   codec_test.cpp
@@ -21,6 +22,7 @@ add_executable(tsengine_tests
   manifest_test.cpp
   memtable_test.cpp
   query_test.cpp
+  series_index_test.cpp
   wal_test.cpp
 )
 target_link_libraries(tsengine_tests PRIVATE tsengine tsengine_options GTest::gtest_main)

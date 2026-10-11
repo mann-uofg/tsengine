@@ -33,11 +33,16 @@ class Memtable {
   // timestamps reduced to their last write.
   void ReadRange(uint64_t series_id, TimeRange range, Points* out) const;
 
+  // The earliest and latest timestamp held for a series. Returns false if it has no points.
+  bool TimeBounds(uint64_t series_id, TimeRange* bounds) const;
+
  private:
   struct Series {
     Points points;
     // True while timestamps have arrived strictly increasing, so no sorting is needed.
     bool ordered = true;
+    int64_t min_timestamp = 0;
+    int64_t max_timestamp = 0;
   };
 
   std::unordered_map<uint64_t, Series> series_;
