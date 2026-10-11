@@ -16,6 +16,7 @@ add_executable(tsengine_tests
   coding_test.cpp
   crc32c_test.cpp
   line_protocol_test.cpp
+  manifest_test.cpp
   memtable_test.cpp
   query_test.cpp
   wal_test.cpp

@@ -25,6 +25,7 @@ add_library(tsengine
   src/crc32c.cpp
   src/file_util.cpp
   src/line_protocol.cpp
+  src/manifest.cpp
   src/memtable.cpp
   src/query.cpp
   src/version.cpp

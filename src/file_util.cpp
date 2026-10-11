@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <cstdio>
 #include <filesystem>
 #include <system_error>
 #include <utility>
@@ -89,6 +90,26 @@ Status ReadFile(const std::string& path, std::string* out) {
   }
   ::close(fd);
   out->resize(done);
+  return s;
+}
+
+Status WriteFileAtomic(const std::string& path, std::string_view data) {
+  const std::string tmp_path = path + ".tmp";
+  const int fd = ::open(tmp_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+  if (fd < 0) {
+    return ErrnoStatus("open", tmp_path, errno);
+  }
+  Status s = WriteAll(fd, tmp_path, data.data(), data.size());
+  if (s.ok()) {
+    s = SyncFd(fd, tmp_path);
+  }
+  ::close(fd);
+  if (s.ok() && std::rename(tmp_path.c_str(), path.c_str()) != 0) {
+    s = ErrnoStatus("rename", tmp_path, errno);
+  }
+  if (s.ok()) {
+    s = SyncParentDir(path);
+  }
   return s;
 }
 

@@ -27,4 +27,9 @@ Status SyncParentDir(const std::string& path);
 // Reads a whole file into memory.
 Status ReadFile(const std::string& path, std::string* out);
 
+// Replaces the contents of `path` with `data` in one step: the data is written to a temporary
+// file, synced, and renamed over `path`. After a crash the file holds either the old contents
+// or the new ones, never a mixture.
+Status WriteFileAtomic(const std::string& path, std::string_view data);
+
 }  // namespace tsengine
