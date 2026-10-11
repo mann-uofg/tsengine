@@ -23,6 +23,7 @@ add_library(tsengine
   src/block_file.cpp
   src/codec.cpp
   src/crc32c.cpp
+  src/engine.cpp
   src/file_util.cpp
   src/line_protocol.cpp
   src/manifest.cpp
