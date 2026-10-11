@@ -199,6 +199,15 @@ TEST_F(ApiTest, TimestampUnitAndDefaultTimestamp) {
   EXPECT_EQ(Query(), Envelope(Result("cpu value", "777,5000000000", "2,1"), 1));
 }
 
+// 9e9 seconds still fits in an int64 as nanoseconds; 1e10 seconds does not.
+TEST_F(ApiTest, TimestampThatOverflowsIsRejected) {
+  unit_ns_ = 1000000000;
+  const Status s = Write("cpu value=1 9000000000\ncpu value=2 10000000000\n");
+  EXPECT_EQ(s.code(), Status::Code::kInvalidArgument);
+  EXPECT_TRUE(Contains(s.message(), "line 2")) << s.message();
+  EXPECT_EQ(engine_->series_count(), 0U);
+}
+
 TEST_F(ApiTest, NamesAreEscapedInJson) {
   ASSERT_TRUE(Write("we\"ird value=1.5 3\n").ok());
   EXPECT_EQ(Query(), Envelope(Result("we\\\"ird value", "3", "1.5"), 1));

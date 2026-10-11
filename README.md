@@ -94,6 +94,9 @@ are unaffected at every size.
 - **One change to TSBS:** its TimescaleDB loader passes an argument that TimescaleDB 2.14
   removed. [bench/setup.sh](bench/setup.sh) replaces it with a no-op so that the baseline can be
   a current release.
+- **Version measured:** commit `3caa24f`. Later commits upgraded the HTTP library and added
+  input checks. A spot check afterwards gave 6.10 M points/s and query medians of 0.19, 0.34,
+  0.29, 0.68 and 7.16 ms, in line with the table.
 - **Machine:** AMD Ryzen 7 7800X3D (8 cores, 16 threads), 15 GB RAM available to WSL2, ext4,
   Ubuntu 24.04, GCC 13.3 `-O3` (CMake Release), Docker 29.1.
 
@@ -130,7 +133,7 @@ Linux (or WSL2), CMake ≥ 3.25, Ninja, GCC ≥ 12 or Clang ≥ 15.
 ```bash
 cmake --preset debug          # Debug + ASan/UBSan
 cmake --build --preset debug
-ctest --preset debug          # 139 tests
+ctest --preset debug          # 142 tests
 ```
 
 ```bash
@@ -205,7 +208,12 @@ python3 bench/report.py ~/tsbench/results docs/img
 - **Crash safety is tested against process death, not power loss.** The fsync ordering is
   designed for power loss, but nothing here tests it.
 - **Retention removes whole partitions** of flushed data only.
-- **Linux only.** No authentication, no TLS.
+- **Not for untrusted networks.** There is no authentication and no TLS, so anyone who can
+  reach the port can read and write everything. The server listens on `127.0.0.1` unless told
+  otherwise. Requests are size-limited and malformed input is rejected, but nothing limits how
+  many series or how much data a client may create, so a client with access can fill the disk
+  or memory.
+- **Linux only.**
 - **Compression figures are for this dataset.** TSBS CPU metrics are small integers that change
   slowly, which is close to the best case for these encoders. The Gorilla paper reports 1.37
   bytes per point on Facebook's production data; 0.945 here does not mean this beats it.

@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+# The workflow only reads the repository; it needs no other access.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     name: ${{ matrix.cxx }} / ${{ matrix.preset }}
@@ -16,7 +20,7 @@ jobs:
     env:
       CXX: ${{ matrix.cxx }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - name: Install Ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Configure
@@ -32,7 +36,7 @@ jobs:
     name: TSBS load
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - name: Install Ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Build server
@@ -41,7 +45,8 @@ jobs:
           cmake --build --preset release --target tsengine_server
       - name: Build TSBS
         run: |
-          git clone --depth 1 https://github.com/timescale/tsbs.git /tmp/tsbs
+          git clone https://github.com/timescale/tsbs.git /tmp/tsbs
+          git -C /tmp/tsbs checkout -q 8323e59c74027b108f4ad5ec5d3e498b0101a02e
           mkdir -p /tmp/tsbs-bin
           cd /tmp/tsbs
           go build -o /tmp/tsbs-bin/ ./cmd/tsbs_generate_data ./cmd/tsbs_load_influx
@@ -51,6 +56,6 @@ jobs:
   format:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - name: clang-format check
         run: git ls-files '*.h' '*.cpp' | xargs clang-format --dry-run --Werror

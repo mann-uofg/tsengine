@@ -158,7 +158,12 @@ Status Api::Parse(const WriteRequest& request, ParsedBatch* batch) {
     }
     int64_t timestamp = request.now_ns;
     if (line.has_timestamp) {
-      timestamp = line.timestamp_ns * request.timestamp_unit_ns;
+      // A huge timestamp in seconds or milliseconds would overflow when converted to
+      // nanoseconds. Signed overflow is undefined behaviour, so reject it instead.
+      if (__builtin_mul_overflow(line.timestamp_ns, request.timestamp_unit_ns, &timestamp)) {
+        return Status::InvalidArgument("line " + std::to_string(line_number) +
+                                       ": timestamp is out of range");
+      }
     }
     // Every field of the line is a series of its own.
     for (const LineField& field : line.fields) {

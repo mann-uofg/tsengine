@@ -47,7 +47,7 @@ if(TSENGINE_BUILD_SERVER)
   FetchContent_Declare(
     httplib
     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-    GIT_TAG v0.18.3
+    GIT_TAG 00afaaed6aaba592e4d079742dfecfba2dcd1196  # v0.60.1
     SYSTEM
   )
   FetchContent_MakeAvailable(httplib)

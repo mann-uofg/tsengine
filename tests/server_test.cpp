@@ -137,6 +137,49 @@ TEST_F(ServerTest, FlushCompactAndStats) {
   EXPECT_TRUE(Has("\"values\":[1]")) << body_;
 }
 
+// A second server on the same engine that accepts at most 64 bytes per request.
+TEST_F(ServerTest, OversizedBodyIsRefused) {
+  Server small(engine_.get(), 64);
+  const int port = small.Bind("127.0.0.1", 0);
+  ASSERT_GT(port, 0);
+  std::thread thread([&small] { small.Serve(); });
+  small.WaitUntilReady();
+  {
+    httplib::Client client("127.0.0.1", port);
+    const httplib::Result fits = client.Post("/write", "cpu value=1 1\n", "text/plain");
+    ASSERT_TRUE(static_cast<bool>(fits));
+    EXPECT_EQ(fits->status, 204);
+    const std::string big(4096, 'x');
+    const httplib::Result refused = client.Post("/write", big, "text/plain");
+    ASSERT_TRUE(static_cast<bool>(refused));
+    EXPECT_EQ(refused->status, 413);
+  }
+  small.Stop();
+  thread.join();
+  // Nothing of the refused body was stored.
+  EXPECT_EQ(Get("/api/v1/query?measurement=cpu&agg=count"), 200);
+  EXPECT_TRUE(Has("\"values\":[1]")) << body_;
+}
+
+TEST_F(ServerTest, HostileInputIsRejectedCleanly) {
+  // A timestamp that overflows once scaled to nanoseconds.
+  EXPECT_EQ(Post("/write?precision=s", "cpu value=1 99999999999999\n"), 400);
+  // Bytes that are not text, a line with no end, and a body of only separators.
+  EXPECT_EQ(Post("/write", std::string("\x00\xff\xfe,=, \x01", 8)), 400);
+  EXPECT_EQ(Post("/write", std::string(100000, 'a')), 400);
+  EXPECT_EQ(Post("/write", std::string(5000, ',')), 400);
+  // Extreme query parameters.
+  EXPECT_EQ(Get("/api/v1/query?start=-9223372036854775808&end=9223372036854775807&bucket=1"), 200);
+  EXPECT_EQ(Get("/api/v1/query?agg=sum&bucket=9223372036854775807"), 200);
+  EXPECT_EQ(Get("/api/v1/query?agg=sum&bucket=-5&start=5&end=1"), 200);
+  EXPECT_EQ(Get("/api/v1/query?start=99999999999999999999"), 400);
+  EXPECT_EQ(Get("/api/v1/query?measurement=%00%ff&tag=%22:%5c&group_by=%0a"), 200);
+  // The server is still healthy and stored none of it.
+  EXPECT_EQ(Get("/health"), 200);
+  EXPECT_EQ(Get("/api/v1/stats"), 200);
+  EXPECT_TRUE(Has("\"series\":0")) << body_;
+}
+
 // The requests tsbs_load_influx makes before it starts writing.
 TEST_F(ServerTest, AnswersTheInfluxLoaderHandshake) {
   EXPECT_EQ(Get("/query?q=show%20databases"), 200);

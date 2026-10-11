@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -21,9 +22,16 @@ namespace tsengine {
 // `tag` may be given several times. Repeating a key matches any of its values; different
 // keys must all match. Requests are handled on a thread pool, but the engine is
 // single-threaded, so one mutex lets one request touch it at a time.
+//
+// There is no authentication and no TLS. Anyone who can reach the port can read, write and
+// fill the disk, so the server is meant for a loopback address or a trusted network only.
+inline constexpr size_t kDefaultMaxRequestBytes = size_t{256} << 20;
+
 class Server {
  public:
-  explicit Server(Engine* engine);
+  // Request bodies larger than `max_request_bytes` are refused with 413, so that one request
+  // cannot exhaust the server's memory.
+  explicit Server(Engine* engine, size_t max_request_bytes = kDefaultMaxRequestBytes);
   ~Server();
   Server(const Server&) = delete;
   Server& operator=(const Server&) = delete;

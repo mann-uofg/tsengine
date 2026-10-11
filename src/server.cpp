@@ -215,7 +215,8 @@ void Server::Impl::Compact(const httplib::Request&, httplib::Response* res) {
   res->set_content("{}", kJson);
 }
 
-Server::Server(Engine* engine) : impl_(std::make_unique<Impl>(engine)) {
+Server::Server(Engine* engine, size_t max_request_bytes) : impl_(std::make_unique<Impl>(engine)) {
+  impl_->http.set_payload_max_length(max_request_bytes);
   Impl* impl = impl_.get();
   httplib::Server& http = impl->http;
   // Send each response as soon as it is written. Without this, Nagle's algorithm holds the
